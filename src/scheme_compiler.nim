@@ -207,6 +207,7 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
       for arg in sexp_arguments:
         nasm &= [
           &"mov rsi, {arg}",
+           "xor eax, eax",
            "call printf wrt ..plt",
         ]
       nasm.add("pop rsi")
@@ -232,7 +233,7 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
       ]
       result_queue.addLast(SexpResult(kind:Register, reg:"r8"))
     else:
-      return @[";Didn't comile"]
+      return @[";Didn't compile"]
   return nasm
 
 
@@ -275,14 +276,14 @@ main:
     nasm &= genNasm(sexp, result_queue)
 
 
-  return setup_code & nasm.join("\n")
+  return setup_code & nasm.join("\n") & "\nret"
 
 
 
 when isMainModule:
   echo("Welcome to my shitty scheme impl")
-  let tokens = tokenizeString("(print (+ 1 3))")
-  echo tokens
+  let code = "(print (+ 1 3))"
+  let tokens = tokenizeString(code)
   let (ast, _) = createSexp(tokens)
 
   let nasm = walkAst(ast)
@@ -290,4 +291,6 @@ when isMainModule:
   echo "---------------NASM OUTPUT------------- \n\n"
   echo nasm
   writeFile("asm/test.asm", nasm)
+  echo "---------------EXECUTING-------------"
+  echo code
   discard execShellCmd("./asm/build_nasm.sh asm/test.asm")
