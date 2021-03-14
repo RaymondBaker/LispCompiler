@@ -3,6 +3,9 @@
 #
 import sequtils
 import strutils
+import strformat
+import deques
+import os
 
 type
   TokenType = enum
@@ -128,17 +131,163 @@ proc createSexp(token_arr: openArray[TokenObject], cur_loc: int = 0): (Sexp, int
       return (new_sexp, i)
     i += 1
 
+type
+  Stack[T] = object
+    vals: seq[T]
+    top_idx: int
+
+proc newStack[T](init_size: int = 10): Stack[T] =
+  result.vals = newSeq[T](init_size)
+  result.top_idx = -1
+
+proc push[T](stack: var Stack[T], val: T) =
+  stack.top_idx += 1
+  if stack.top_idx > stack.vals.high:
+    stack.vals.add(val)
+  else:
+    stack.vals[stack.top_idx] = val
+
+proc top[T](stack: Stack[T]): T =
+  if stack.top_idx < 0:
+    return nil
+  result = stack.vals[stack.top_idx]
+
+proc pop[T](stack: var Stack[T]): T =
+  if stack.top_idx < 0:
+    return nil
+  result = stack.vals[stack.top_idx]
+  stack.top_idx -= 1
+
+proc len[T](stack: Stack[T]): int =
+  return stack.top_idx + 1
+
+type
+  SexpResultType = enum
+    Integer, String, Procedure, Register, None
+  SexpResult = object
+    case kind: SexpResultType
+    of Register:
+      reg: string
+    of Integer:
+      val: int
+    of String:
+      text: string
+    of Procedure:
+      #TODO Implement
+      discard
+    of None:
+      discard
+
+
+proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
+  # Get argument results
+  # List of strings
+  var sexp_arguments = newSeq[string]()
+  for arg in sexp.arguments:
+    case arg.kind:
+      of SexpType:
+        if result_queue.peekFirst.kind == Register:
+          sexp_arguments.add($result_queue.popfirst().reg)
+      of NumberType:
+        sexp_arguments.add($arg.value.int)
+      else:
+        discard
+
+
+  var nasm = newSeq[string]()
+
+  case sexp.identifier:
+    of "print":
+      nasm = @[
+        "; Print ",
+        "push rdi",
+        "push rsi",
+        "mov rdi, int_print_fmt"
+      ]
+      for arg in sexp_arguments:
+        nasm &= [
+          &"mov rsi, {arg}",
+           "call printf wrt ..plt",
+        ]
+      nasm.add("pop rsi")
+      nasm.add("pop rdi")
+      result_queue.addLast(SexpResult(kind:None))
+    of "+":
+      nasm = @[
+        "; add ",
+        #"push r8",
+        "push r9",
+        &"mov r8, {sexp_arguments[0]}"
+      ]
+      for arg in sexp_arguments[1..sexp_arguments.high]:
+        nasm &= [
+          &"mov r9, {arg}",
+           "add r8, r9",
+        ]
+      #TODO
+      ## Using r8 as output this will not work if there are more than one adds in a sexp
+      nasm &= [
+        "pop r9",
+        #"pop r8",
+      ]
+      result_queue.addLast(SexpResult(kind:Register, reg:"r8"))
+    else:
+      return @[";Didn't comile"]
+  return nasm
+
+
+
+proc walkAst(root_node: Sexp): string =
+  let setup_code = """
+    global main
+    extern puts
+    extern printf
+
+default rel
+    section .data
+int_print_fmt: db "%d \n", 0
+
+    section .text
+main:
+"""
+  var nasm = newSeq[string]()
+  var sexp_stack = newStack[Sexp](12)
+  var result_queue = initDeque[SexpResult](16)
+
+  var procedure_ids = ["print"]
+
+  sexp_stack.push(root_node)
+
+  var descend = true
+  while descend:
+    let sexp = sexp_stack.top()
+    descend = false
+    for arg in sexp.arguments:
+      case arg.kind:
+        of SexpType:
+          sexp_stack.push(arg.expr)
+          descend = true
+        else:
+          discard
+
+  while sexp_stack.len() > 0:
+    let sexp = sexp_stack.pop()
+    nasm &= genNasm(sexp, result_queue)
+
+
+  return setup_code & nasm.join("\n")
+
+
+
 when isMainModule:
   echo("Welcome to my shitty scheme impl")
-  let tokens = tokenizeString("(def x (+ 1 3))")
+  let tokens = tokenizeString("(print (+ 1 3))")
   echo tokens
   let (ast, _) = createSexp(tokens)
 
+  let nasm = walkAst(ast)
 
-  let id = ast.identifier
-  let args = ast.arguments
-  echo id
-  echo args
-  let sub_sexp = args[1].expr
-  echo sub_sexp.identifier
-  echo sub_sexp.arguments
+  echo "---------------NASM OUTPUT------------- \n\n"
+  echo nasm
+  writeFile("asm/test.asm", nasm)
+  discard execShellCmd("./asm/build_nasm.sh asm/test.asm")
