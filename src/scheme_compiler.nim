@@ -246,7 +246,7 @@ proc walkAst(root_node: Sexp): string =
 
 default rel
     section .data
-int_print_fmt: db "%d \n", 0
+int_print_fmt: db "%d", 10, 0 ; 10 is newline
 
     section .text
 main:
@@ -282,7 +282,7 @@ main:
 
 when isMainModule:
   echo("Welcome to my shitty scheme impl")
-  let code = "(print (+ 1 3))"
+  let code = "(print (+ 1 3 32 2 1))"
   let tokens = tokenizeString(code)
   let (ast, _) = createSexp(tokens)
 
@@ -293,4 +293,5 @@ when isMainModule:
   writeFile("asm/test.asm", nasm)
   echo "---------------EXECUTING-------------"
   echo code
+  echo "---------------OUTPUT-------------"
   discard execShellCmd("./asm/build_nasm.sh asm/test.asm")
