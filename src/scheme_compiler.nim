@@ -208,6 +208,7 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
       of SexpType:
         if result_queue.peekFirst.kind == Register:
           sexp_arguments.add($result_queue.popfirst().reg)
+          #TODO add these all to a list and free them at the end of this funcition
       of NumberType:
         sexp_arguments.add($arg.value.int)
       else:
