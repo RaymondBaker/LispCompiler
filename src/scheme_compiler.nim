@@ -194,6 +194,10 @@ proc claimGpReg(): string =
 proc freeGpReg(register: string) =
   used_regs.excl(register)
 
+proc getTempGpReg(): string =
+  ## had to be mutable because only pop was able to get an elem
+  var set_diff = (all_regs - used_regs)
+  result = set_diff.pop
 
 proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
   # Get argument results
@@ -232,24 +236,17 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
       nasm.add("pop rdi")
       result_queue.addLast(SexpResult(kind:None))
     of "+":
-      var result_reg = claimGpReg()
+      let result_reg = claimGpReg()
+      let operand_reg = getTempGpReg()
       nasm = @[
         "; add ",
-        #"push r8",
-        "push r9",
         &"mov {result_reg}, {sexp_arguments[0]}"
       ]
       for arg in sexp_arguments[1..sexp_arguments.high]:
         nasm &= [
-          &"mov r9, {arg}",
-          &"add {result_reg}, r9",
+          &"mov {operand_reg}, {arg}",
+          &"add {result_reg}, {operand_reg}",
         ]
-      #TODO
-      ## Using r8 as output this will not work if there are more than one adds in a sexp
-      nasm &= [
-        "pop r9",
-        #"pop r8",
-      ]
       result_queue.addLast(SexpResult(kind:Register, reg:result_reg))
     else:
       return @[";Didn't compile"]
@@ -300,7 +297,7 @@ main:
 
 when isMainModule:
   echo("Welcome to my shitty scheme impl")
-  let code = "(print (+ 1 3 (+ 3 5 3)))"
+  let code = "(print (+ 1 3 (+ 3 5 (+ 234 3))))"
   let tokens = tokenizeString(code)
   let (ast, _) = createSexp(tokens)
 

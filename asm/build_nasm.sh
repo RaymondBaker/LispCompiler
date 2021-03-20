@@ -7,4 +7,4 @@ fi
 filename=$1
 without_ext=$(echo $filename | sed 's/\.[^.]*$//')
 
-nasm -felf64 $filename && gcc $without_ext.o -o $without_ext && ./$without_ext
+nasm -felf64 -F dwarf -g $filename && gcc $without_ext.o -o $without_ext && ./$without_ext
