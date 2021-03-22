@@ -203,11 +203,15 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
   # Get argument results
   # List of strings
   var sexp_arguments = newSeq[string]()
+  # used for freeing later
+  var register_arguments = newSeq[string]()
   for arg in sexp.arguments:
     case arg.kind:
       of SexpType:
         if result_queue.peekFirst.kind == Register:
-          sexp_arguments.add($result_queue.popfirst().reg)
+          let argument = $result_queue.popfirst().reg
+          sexp_arguments.add(argument)
+          register_arguments.add(argument)
           #TODO add these all to a list and free them at the end of this funcition
       of NumberType:
         sexp_arguments.add($arg.value.int)
@@ -251,6 +255,9 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
       result_queue.addLast(SexpResult(kind:Register, reg:result_reg))
     else:
       return @[";Didn't compile"]
+  # free any result regs used in this statement
+  for reg in register_arguments:
+    freeGpReg(reg)
   return nasm
 
 
