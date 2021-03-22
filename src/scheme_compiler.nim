@@ -182,6 +182,7 @@ type
 
 
 #TODO make this a param or an obj
+#TODO Make this a closure inside the walkAst Function and pass it to gen nasm
 let all_regs = toHashSet(["r8", "r9", "r10", "r11"])
 var used_regs = initHashset[string]()
 #used_regs,all_regs : HashSet[string]
@@ -253,6 +254,21 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
           &"add {result_reg}, {operand_reg}",
         ]
       result_queue.addLast(SexpResult(kind:Register, reg:result_reg))
+    of "-":
+      let result_reg = claimGpReg()
+      let operand_reg = getTempGpReg()
+      nasm = @[
+        "; add ",
+        &"mov {result_reg}, {sexp_arguments[0]}"
+      ]
+      for arg in sexp_arguments[1..sexp_arguments.high]:
+        nasm &= [
+          &"mov {operand_reg}, {arg}",
+          &"sub {result_reg}, {operand_reg}",
+        ]
+      result_queue.addLast(SexpResult(kind:Register, reg:result_reg))
+  #TODO mul and div they accutally talk one reg in and are hard coded to use another as the dividend
+  # Might want to make the above code use that if that is what the cpu is optimized for
     else:
       return @[";Didn't compile"]
   # free any result regs used in this statement
@@ -305,7 +321,7 @@ main:
 
 when isMainModule:
   echo("Welcome to my shitty scheme impl")
-  let code = "(print (+ 1 3 (+ 3 5 (+ 234 3))))"
+  let code = "(print (+ 1 3 (+ 3 5)(- 3 245)))"
   let tokens = tokenizeString(code)
   let (ast, _) = createSexp(tokens)
 
