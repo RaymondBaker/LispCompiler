@@ -9,6 +9,8 @@ import os
 import sets
 import typetraits
 
+#import var
+
 type
   TokenType = enum
     IdentifierToken, NumberToken, EOFToken, OpenParen, CloseParen, Unknown
@@ -183,6 +185,7 @@ type
 
 #TODO make this a param or an obj
 #TODO Make this a closure inside the walkAst Function and pass it to gen nasm
+#TODO make this a object that could either be a stack var or register
 let all_regs = toHashSet(["r8", "r9", "r10", "r11"])
 var used_regs = initHashset[string]()
 #used_regs,all_regs : HashSet[string]
@@ -228,10 +231,10 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
         "; Print ",
         "push rdi",
         "push rsi",
-        "mov rdi, int_print_fmt"
       ]
       for arg in sexp_arguments:
         nasm &= [
+           "mov rdi, int_print_fmt",
           &"mov rsi, {arg}",
            "xor eax, eax",
            "call printf wrt ..plt",
@@ -258,7 +261,7 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
       let result_reg = claimGpReg()
       let operand_reg = getTempGpReg()
       nasm = @[
-        "; add ",
+        "; sub ",
         &"mov {result_reg}, {sexp_arguments[0]}"
       ]
       for arg in sexp_arguments[1..sexp_arguments.high]:
@@ -339,7 +342,9 @@ main:
   while descend:
     let sexp = sexp_stack.top()
     descend = false
-    for arg in sexp.arguments:
+    # Push in reverse order to keep list operations in correct order
+    for ind in countdown(high(sexp.arguments),low(sexp.arguments)):
+      let arg = sexp.arguments[ind]
       case arg.kind:
         of SexpType:
           sexp_stack.push(arg.expr)
@@ -358,7 +363,7 @@ main:
 
 when isMainModule:
   echo("Welcome to my shitty scheme impl")
-  let code = "(print (/ (* 3 3) 3))"
+  let code = "(print (* 3 3) (- 4 2) (+ 2 3))"
   let tokens = tokenizeString(code)
   let (ast, _) = createSexp(tokens)
 
