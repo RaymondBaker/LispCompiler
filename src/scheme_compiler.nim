@@ -267,6 +267,43 @@ proc genNasm(sexp: Sexp, result_queue: var Deque[SexpResult]): seq[string] =
           &"sub {result_reg}, {operand_reg}",
         ]
       result_queue.addLast(SexpResult(kind:Register, reg:result_reg))
+    of "*":
+      let result_reg = claimGpReg()
+      let operand_reg = getTempGpReg()
+      nasm = @[
+        "; mul ",
+        &"mov rax, {sexp_arguments[0]}"
+      ]
+      for arg in sexp_arguments[1..sexp_arguments.high]:
+        nasm &= [
+          &"mov {operand_reg}, {arg}",
+          &"mul {operand_reg}",
+        ]
+      # move result to saved register
+      nasm &= [
+        &"mov {result_reg}, rax",
+      ]
+      result_queue.addLast(SexpResult(kind:Register, reg:result_reg))
+    of "/":
+      let result_reg = claimGpReg()
+      let operand_reg = getTempGpReg()
+      nasm = @[
+        "; div ",
+        &"mov rax, {sexp_arguments[0]}"
+      ]
+      for arg in sexp_arguments[1..sexp_arguments.high]:
+        nasm &= [
+          &"mov {operand_reg}, {arg}",
+          # the remainder reg needs to be zero
+          "xor rdx, rdx",
+          &"div {operand_reg}",
+        ]
+      # move result to saved register
+      nasm &= [
+        &"mov {result_reg}, rax",
+      ]
+      result_queue.addLast(SexpResult(kind:Register, reg:result_reg))
+
   #TODO mul and div they accutally talk one reg in and are hard coded to use another as the dividend
   # Might want to make the above code use that if that is what the cpu is optimized for
     else:
@@ -321,7 +358,7 @@ main:
 
 when isMainModule:
   echo("Welcome to my shitty scheme impl")
-  let code = "(print (+ 1 3 (+ 3 5)(- 3 245)))"
+  let code = "(print (/ (* 3 3) 3))"
   let tokens = tokenizeString(code)
   let (ast, _) = createSexp(tokens)
 
